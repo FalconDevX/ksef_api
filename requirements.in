@@ -1,0 +1,10 @@
+requests
+pydantic-settings
+cryptography
+lxml
+playwright
+fastapi
+uvicorn[standard]
+sqlalchemy
+sqlmodel
+psycopg[binary]
