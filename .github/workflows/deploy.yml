@@ -23,5 +23,6 @@ jobs:
           set -e
           cd /home/mati/ksef_api
           git pull --ff-only origin main
-          docker compose up -d --build
+          docker compose build pdf backend
+          docker compose up -d --remove-orphans
           docker image prune -f

@@ -10,6 +10,7 @@ services:
     environment:
       PDF_SERVICE_URL: http://ksef-pdf:8080
       DATABASE_URL: postgresql+psycopg://ksef_user:${POSTGRES_PASSWORD}@ksef-postgres:5432/ksef
+      KSEF_QR_BASE_URL: ${KSEF_QR_BASE_URL:-https://qr-test.ksef.mf.gov.pl}
     depends_on:
       - pdf
       - postgres

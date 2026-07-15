@@ -4,11 +4,15 @@ import io.alapierre.ksef.fop.InvoiceGenerationParams;
 import io.alapierre.ksef.fop.InvoiceQRCodeGeneratorRequest;
 import io.alapierre.ksef.fop.InvoiceSchema;
 import io.alapierre.ksef.fop.PdfGenerator;
+import io.alapierre.ksef.fop.qr.VerificationLinkGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,17 +22,27 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/v1")
 public class PdfController {
 
+    private static final Logger log = LoggerFactory.getLogger(PdfController.class);
     private static final int MAX_XML_SIZE = 10 * 1024 * 1024;
 
     private final PdfGenerator pdfGenerator;
 
     public PdfController() throws Exception {
         this.pdfGenerator = new PdfGenerator("fop.xconf");
+    }
+
+    @GetMapping("/health")
+    public Map<String, Object> health() {
+        return Map.of(
+            "status", "ok",
+            "qrEnabled", true
+        );
     }
 
     @PostMapping(
@@ -58,12 +72,24 @@ public class PdfController {
             throw new IllegalArgumentException("XML exceeds 10 MB limit");
         }
 
+        String verificationLink = VerificationLinkGenerator.generateVerificationLink(
+            qrBaseUrl,
+            sellerNip,
+            issueDate,
+            invoiceXml
+        );
+
+        log.info(
+            "Generating PDF with QR for ksefNumber={}, nip={}, issueDate={}, qrBaseUrl={}",
+            ksefNumber,
+            sellerNip,
+            issueDate,
+            qrBaseUrl
+        );
+        log.debug("Verification link: {}", verificationLink);
+
         InvoiceQRCodeGeneratorRequest qrRequest =
-            InvoiceQRCodeGeneratorRequest.onlineQrBuilder(
-                qrBaseUrl,
-                sellerNip,
-                issueDate
-            );
+            InvoiceQRCodeGeneratorRequest.onlineQrBuilder(verificationLink);
 
         InvoiceGenerationParams params =
             InvoiceGenerationParams.builder()
@@ -86,10 +112,11 @@ public class PdfController {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDisposition(
-            ContentDisposition.inline()
+            ContentDisposition.attachment()
                 .filename(filename, StandardCharsets.UTF_8)
                 .build()
         );
+        headers.add("X-KSeF-Verification-Link", verificationLink);
 
         return ResponseEntity
             .ok()

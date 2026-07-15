@@ -265,6 +265,17 @@ def get_invoice_pdf(
         )
         pdf_response.raise_for_status()
 
+    except requests.HTTPError as exc:
+        detail = "PDF service is unavailable"
+        if exc.response is not None:
+            try:
+                detail = exc.response.json().get("detail", detail)
+            except ValueError:
+                detail = exc.response.text or detail
+        raise HTTPException(
+            status_code=exc.response.status_code if exc.response is not None else 502,
+            detail=detail,
+        ) from exc
     except requests.RequestException as exc:
         raise HTTPException(
             status_code=502,
