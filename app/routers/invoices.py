@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -222,16 +223,37 @@ def get_invoice_pdf(ksef_number: str) -> Response:
             detail="PDF service is unavailable",
         ) from exc
 
+    pdf_content = response.content
+    if not pdf_content.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=502,
+            detail="PDF service returned invalid response",
+        )
+
+    filename = f"{ksef_number}.pdf"
     return Response(
-        content=response.content,
+        content=pdf_content,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="{ksef_number}.pdf"',
+            "Content-Disposition": (
+                f"attachment; filename=\"{filename}\"; "
+                f"filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "no-store",
         },
     )
 
-
 @router.get("/{ksef_number}")
-def get_invoice(ksef_number: str) -> str:
+def get_invoice(ksef_number: str) -> Response:
     tokens = _get_tokens()
-    return get_invoice_by_num(tokens, ksef_number)
+    invoice_xml = get_invoice_by_num(tokens, ksef_number)
+    return Response(
+        content=invoice_xml,
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{ksef_number}.xml\"; "
+                f"filename*=UTF-8''{quote(f'{ksef_number}.xml')}"
+            ),
+        },
+    )
