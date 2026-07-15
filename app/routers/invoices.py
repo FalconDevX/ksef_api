@@ -46,7 +46,7 @@ def sync_invoices(session: SessionDep):
         )
 
         if last_storage_date is None:
-            date_from = date_to - timedelta(days=7)
+            date_from = date_to - timedelta(days=15)
         else:
             date_from = last_storage_date - timedelta(minutes=5)
 
