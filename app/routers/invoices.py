@@ -11,6 +11,7 @@ from app.config import settings
 from app.database import SessionDep
 from app.ksef.client import auth, redeem_token, wait_for_auth
 from app.ksef.invoices import (
+    KsefInvoiceError,
     get_all_invoices_metadata,
     get_invoice_by_num,
     get_invoice_bytes_by_num,
@@ -234,10 +235,16 @@ def get_invoice_pdf(
 
     tokens = _get_tokens()
 
-    invoice_xml = get_invoice_bytes_by_num(
-        tokens=tokens,
-        ksef_number=ksef_number,
-    )
+    try:
+        invoice_xml = get_invoice_bytes_by_num(
+            tokens=tokens,
+            ksef_number=ksef_number,
+        )
+    except KsefInvoiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+        ) from exc
 
     try:
         pdf_response = requests.post(
@@ -287,7 +294,15 @@ def get_invoice_pdf(
 @router.get("/{ksef_number}")
 def get_invoice(ksef_number: str) -> Response:
     tokens = _get_tokens()
-    invoice_xml = get_invoice_by_num(tokens, ksef_number)
+
+    try:
+        invoice_xml = get_invoice_by_num(tokens, ksef_number)
+    except KsefInvoiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+        ) from exc
+
     return Response(
         content=invoice_xml,
         media_type="application/xml",

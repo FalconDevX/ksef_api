@@ -9,6 +9,65 @@ from app.models.auth import TokenPair
 MAX_INVOICES_PER_SUBJECT = 100
 
 
+class KsefInvoiceError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+
+
+def _check_invoice_response(
+    response: requests.Response,
+    ksef_number: str,
+) -> None:
+    if response.ok:
+        return
+
+    if response.status_code == 404:
+        raise KsefInvoiceError(
+            404,
+            f"Invoice with KSeF number '{ksef_number}' was not found",
+        )
+
+    if response.status_code == 400:
+        raise KsefInvoiceError(
+            400,
+            f"Invalid KSeF invoice number: '{ksef_number}'",
+        )
+
+    if response.status_code in {401, 403}:
+        raise KsefInvoiceError(
+            502,
+            "KSeF authentication failed while fetching invoice",
+        )
+
+    raise KsefInvoiceError(
+        502,
+        f"KSeF returned unexpected status {response.status_code}",
+    )
+
+
+def _fetch_invoice_response(
+    tokens: TokenPair,
+    ksef_number: str,
+) -> requests.Response:
+    try:
+        response = requests.get(
+            f"{settings.ksef_base_url}/invoices/ksef/{ksef_number}",
+            headers={
+                "Authorization": f"Bearer {tokens.accessToken.token}",
+            },
+            timeout=20,
+        )
+    except requests.RequestException as exc:
+        raise KsefInvoiceError(
+            502,
+            "KSeF is unavailable",
+        ) from exc
+
+    _check_invoice_response(response, ksef_number)
+    return response
+
+
 def get_all_invoices_metadata(
     tokens: TokenPair,
     date_from: str,
@@ -116,12 +175,7 @@ def get_invoices_metadata_for_subject(
 
 
 def get_invoice_by_num(tokens: TokenPair, ksef_number: str) -> str:
-    response = requests.get(
-        f"{settings.ksef_base_url}/invoices/ksef/{ksef_number}",
-        headers={"Authorization": f"Bearer {tokens.accessToken.token}"},
-        timeout=20,
-    )
-    response.raise_for_status()
+    response = _fetch_invoice_response(tokens, ksef_number)
     return response.text
 
 
@@ -129,12 +183,5 @@ def get_invoice_bytes_by_num(
     tokens: TokenPair,
     ksef_number: str,
 ) -> bytes:
-    response = requests.get(
-        f"{settings.ksef_base_url}/invoices/ksef/{ksef_number}",
-        headers={
-            "Authorization": f"Bearer {tokens.accessToken.token}",
-        },
-        timeout=20,
-    )
-    response.raise_for_status()
+    response = _fetch_invoice_response(tokens, ksef_number)
     return response.content
