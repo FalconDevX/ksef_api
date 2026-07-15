@@ -1,13 +1,33 @@
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 
+from sqlalchemy import Column, Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 
-class InvoiceMetadata(SQLModel, table=True):
-    ksef_number: str = Field(primary_key=True, max_length=50)
-    invoice_number: str = Field(max_length=100)
+class InvoiceSubjectType(str, Enum):
+    SUBJECT_1 = "Subject1"
+    SUBJECT_2 = "Subject2"
+    SUBJECT_3 = "Subject3"
+    SUBJECT_AUTHORIZED = "SubjectAuthorized"
 
+
+class InvoiceMetadata(SQLModel, table=True):
+    __tablename__ = "invoice_metadata"  # type: ignore
+
+    ksef_number: str = Field(primary_key=True, max_length=50)
+    subject_type: InvoiceSubjectType = Field(
+        sa_column=Column(
+            SAEnum(
+                InvoiceSubjectType,
+                values_callable=lambda enum: [member.value for member in enum],
+                name="invoice_subject_type",
+            ),
+            index=True,
+        ),
+    )
+    invoice_number: str = Field(max_length=100)
     issue_date: date
     invoicing_date: datetime | None = None
     acquisition_date: datetime | None = None
