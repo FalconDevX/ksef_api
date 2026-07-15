@@ -5,7 +5,6 @@ from enum import Enum
 from sqlalchemy import Column, Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
-#test
 class InvoiceSubjectType(str, Enum):
     SUBJECT_1 = "Subject1"
     SUBJECT_2 = "Subject2"
