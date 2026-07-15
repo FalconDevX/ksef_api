@@ -1,8 +1,10 @@
 package pl.ksef.pdf;
 
 import io.alapierre.ksef.fop.InvoiceGenerationParams;
+import io.alapierre.ksef.fop.InvoiceQRCodeGeneratorRequest;
 import io.alapierre.ksef.fop.InvoiceSchema;
 import io.alapierre.ksef.fop.PdfGenerator;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/v1")
@@ -39,6 +42,11 @@ public class PdfController {
     public ResponseEntity<byte[]> generatePdf(
         @RequestBody byte[] invoiceXml,
         @RequestParam String ksefNumber,
+        @RequestParam String sellerNip,
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        LocalDate issueDate,
+        @RequestParam String qrBaseUrl,
         @RequestParam(defaultValue = "pl") String language
     ) throws Exception {
 
@@ -50,15 +58,28 @@ public class PdfController {
             throw new IllegalArgumentException("XML exceeds 10 MB limit");
         }
 
-        InvoiceGenerationParams params = InvoiceGenerationParams.builder()
-            .schema(InvoiceSchema.FA3_1_0_E)
-            .ksefNumber(ksefNumber)
-            .languageLocale(language)
-            .build();
+        InvoiceQRCodeGeneratorRequest qrRequest =
+            InvoiceQRCodeGeneratorRequest.onlineQrBuilder(
+                qrBaseUrl,
+                sellerNip,
+                issueDate
+            );
+
+        InvoiceGenerationParams params =
+            InvoiceGenerationParams.builder()
+                .schema(InvoiceSchema.FA3_1_0_E)
+                .ksefNumber(ksefNumber)
+                .invoiceQRCodeGeneratorRequest(qrRequest)
+                .languageLocale(language)
+                .build();
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-        pdfGenerator.generateInvoice(invoiceXml, params, output);
+        pdfGenerator.generateInvoice(
+            invoiceXml,
+            params,
+            output
+        );
 
         String filename = ksefNumber + ".pdf";
 

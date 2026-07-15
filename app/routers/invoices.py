@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from urllib.parse import quote
 
 import requests
@@ -12,6 +13,7 @@ from app.ksef.client import auth, redeem_token, wait_for_auth
 from app.ksef.invoices import (
     get_all_invoices_metadata,
     get_invoice_by_num,
+    get_invoice_bytes_by_num,
     get_invoices_metadata_for_subject,
 )
 from app.models import InvoiceMetadata
@@ -98,7 +100,19 @@ def get_invoices(
     currency: str | None = None,
     issue_date_from: date | None = None,
     issue_date_to: date | None = None,
+    gross_amount_from: Decimal | None = Query(default=None, ge=0),
+    gross_amount_to: Decimal | None = Query(default=None, ge=0),
 ):
+    if (
+        gross_amount_from is not None
+        and gross_amount_to is not None
+        and gross_amount_from > gross_amount_to
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="gross_amount_from must be less than or equal to gross_amount_to",
+        )
+
     offset = (page - 1) * page_size
     filters = []
 
@@ -113,6 +127,12 @@ def get_invoices(
 
     if issue_date_to is not None:
         filters.append(col(InvoiceMetadata.issue_date) <= issue_date_to)
+
+    if gross_amount_from is not None:
+        filters.append(col(InvoiceMetadata.gross_amount) >= gross_amount_from)
+
+    if gross_amount_to is not None:
+        filters.append(col(InvoiceMetadata.gross_amount) <= gross_amount_to)
 
     similarity_rank = None
 
@@ -194,36 +214,57 @@ def get_invoices(
 
 
 @router.get("/{ksef_number}/pdf")
-def get_invoice_pdf(ksef_number: str) -> Response:
+def get_invoice_pdf(
+    ksef_number: str,
+    session: SessionDep,
+) -> Response:
+    metadata = session.get(InvoiceMetadata, ksef_number)
+
+    if metadata is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Invoice metadata not found",
+        )
+
+    if metadata.seller_nip is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Seller NIP is required to generate QR code",
+        )
+
     tokens = _get_tokens()
 
-    invoice_xml = get_invoice_by_num(
+    invoice_xml = get_invoice_bytes_by_num(
         tokens=tokens,
         ksef_number=ksef_number,
     )
 
     try:
-        response = requests.post(
+        pdf_response = requests.post(
             f"{settings.pdf_service_url}/v1/invoices/pdf",
             params={
                 "ksefNumber": ksef_number,
+                "sellerNip": metadata.seller_nip,
+                "issueDate": metadata.issue_date.isoformat(),
+                "qrBaseUrl": settings.ksef_qr_base_url,
                 "language": "pl",
             },
-            data=invoice_xml.encode("utf-8"),
+            data=invoice_xml,
             headers={
                 "Content-Type": "application/xml",
                 "Accept": "application/pdf",
             },
             timeout=30,
         )
-        response.raise_for_status()
+        pdf_response.raise_for_status()
+
     except requests.RequestException as exc:
         raise HTTPException(
             status_code=502,
             detail="PDF service is unavailable",
         ) from exc
 
-    pdf_content = response.content
+    pdf_content = pdf_response.content
     if not pdf_content.startswith(b"%PDF"):
         raise HTTPException(
             status_code=502,

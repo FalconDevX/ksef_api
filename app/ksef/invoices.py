@@ -123,3 +123,18 @@ def get_invoice_by_num(tokens: TokenPair, ksef_number: str) -> str:
     )
     response.raise_for_status()
     return response.text
+
+
+def get_invoice_bytes_by_num(
+    tokens: TokenPair,
+    ksef_number: str,
+) -> bytes:
+    response = requests.get(
+        f"{settings.ksef_base_url}/invoices/ksef/{ksef_number}",
+        headers={
+            "Authorization": f"Bearer {tokens.accessToken.token}",
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.content

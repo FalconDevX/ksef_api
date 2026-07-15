@@ -9,8 +9,10 @@ services:
       - .env
     environment:
       PDF_SERVICE_URL: http://ksef-pdf:8080
+      DATABASE_URL: postgresql+psycopg://ksef_user:${POSTGRES_PASSWORD}@ksef-postgres:5432/ksef
     depends_on:
       - pdf
+      - postgres
     networks:
       - ksef-network
 
@@ -24,6 +26,26 @@ services:
     networks:
       - ksef-network
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: ksef-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ksef_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ksef
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - ksef-network
+
 networks:
   ksef-network:
     external: true
+
+volumes:
+  postgres_data:
