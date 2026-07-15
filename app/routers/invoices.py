@@ -1,16 +1,26 @@
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Query
+import requests
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, or_
 from sqlmodel import col, select
+
+from app.config import settings
 from app.database import SessionDep
-from app.ksef.client import SUBJECT_TYPES, auth, redeem_token, wait_for_auth
-from app.ksef.invoices import ( get_all_invoices_metadata, get_invoice_by_num, get_invoices_metadata_for_subject, )
+from app.ksef.client import auth, redeem_token, wait_for_auth
+from app.ksef.invoices import (
+    get_all_invoices_metadata,
+    get_invoice_by_num,
+    get_invoices_metadata_for_subject,
+)
 from app.models import InvoiceMetadata
 from app.models.invoice import InvoiceSubjectType
-from app.repositories.invoices import ( get_last_permanent_storage_date, save_new_invoices, )
-router = APIRouter(prefix="/invoices", tags=["invoices"])
+from app.repositories.invoices import (
+    get_last_permanent_storage_date,
+    save_new_invoices,
+)
 
+router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 def _get_tokens():
     auth_data = auth()
@@ -180,6 +190,47 @@ def get_invoices(
         "page": page,
         "page_size": page_size,
     }
+
+
+@router.get("/{ksef_number}/pdf")
+def get_invoice_pdf(ksef_number: str) -> Response:
+    tokens = _get_tokens()
+
+    invoice_xml = get_invoice_by_num(
+        tokens=tokens,
+        ksef_number=ksef_number,
+    )
+
+    try:
+        response = requests.post(
+            f"{settings.pdf_service_url}/v1/invoices/pdf",
+            params={
+                "ksefNumber": ksef_number,
+                "language": "pl",
+            },
+            data=invoice_xml.encode("utf-8"),
+            headers={
+                "Content-Type": "application/xml",
+                "Accept": "application/pdf",
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="PDF service is unavailable",
+        ) from exc
+
+    return Response(
+        content=response.content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{ksef_number}.pdf"',
+        },
+    )
+
+
 @router.get("/{ksef_number}")
 def get_invoice(ksef_number: str) -> str:
     tokens = _get_tokens()

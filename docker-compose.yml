@@ -7,6 +7,20 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      PDF_SERVICE_URL: http://ksef-pdf:8080
+    depends_on:
+      - pdf
+    networks:
+      - ksef-network
+
+  pdf:
+    build:
+      context: ./ksef-pdf-service
+    container_name: ksef-pdf
+    restart: unless-stopped
+    expose:
+      - "8080"
     networks:
       - ksef-network
 
