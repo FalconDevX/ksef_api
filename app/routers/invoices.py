@@ -26,6 +26,9 @@ from app.repositories.invoices import (
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
+# Lower = more typo-tolerant; pg_trgm similarity is in [0, 1].
+FUZZY_SIMILARITY_THRESHOLD = 0.1
+
 def _get_tokens():
     auth_data = auth()
     wait_for_auth(auth_data)
@@ -170,15 +173,19 @@ def get_invoices(
             func.similarity(
                 col(InvoiceMetadata.invoice_number),
                 search,
-            ) >= 0.2,
+            ) >= FUZZY_SIMILARITY_THRESHOLD,
             func.similarity(
                 col(InvoiceMetadata.seller_name),
                 search,
-            ) >= 0.2,
+            ) >= FUZZY_SIMILARITY_THRESHOLD,
             func.similarity(
                 col(InvoiceMetadata.buyer_name),
                 search,
-            ) >= 0.2,
+            ) >= FUZZY_SIMILARITY_THRESHOLD,
+            func.similarity(
+                col(InvoiceMetadata.ksef_number),
+                search,
+            ) >= FUZZY_SIMILARITY_THRESHOLD,
         )
 
         filters.append(search_filter)
