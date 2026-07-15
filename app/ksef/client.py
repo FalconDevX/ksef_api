@@ -6,10 +6,10 @@ from app.config import settings
 from app.ksef.crypto import encrypt_token
 from app.models.auth import Auth, Challenge, Token, TokenPair
 SUBJECT_TYPES = (
-    #"Subject1",
+    "Subject1",
     "Subject2",
-    # "Subject3",
-    # "SubjectAuthorized",
+    "Subject3",
+    "SubjectAuthorized",
 )
 
 def get_auth_challenge() -> Challenge:
